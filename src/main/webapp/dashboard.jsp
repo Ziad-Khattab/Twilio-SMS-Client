@@ -133,12 +133,18 @@
                                 <% } %>
                                     <form action="send-sms" method="post">
                                         <div class="form-group">
-                                            <label for="recipient">Recipient Phone Number</label>
+                                            <label for="from">From</label>
+                                            <input type="tel" id="from"
+                                                value="<%= request.getAttribute("senderId") != null ? request.getAttribute("senderId") : "" %>"
+                                                placeholder="Your Twilio sender number" readonly>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="recipient">To</label>
                                             <input type="tel" id="recipient" name="recipient" placeholder="+1234567890"
                                                 required>
                                         </div>
                                         <div class="form-group">
-                                            <label for="message">Message</label>
+                                            <label for="message">Body</label>
                                             <textarea id="message" name="message"
                                                 placeholder="Enter your message here..." required></textarea>
                                         </div>
@@ -152,33 +158,32 @@
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Recipient</th>
-                                    <th>Message</th>
+                                    <th>From</th>
+                                    <th>To</th>
+                                    <th>Body</th>
                                     <th>Status</th>
                                     <th>Sent At</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <% List<?> smsList = (List
-                                    <?>) request.getAttribute("smsHistory");
-                        if (smsList != null && !smsList.isEmpty()) {
-                            for (Object item : smsList) {
-                                java.util.Map<String, Object> sms = (java.util.Map<String, Object>) item;
-                        %>
-                        <tr>
-                            <td><%= sms.get("recipient") %></td>
-                            <td><%= sms.get("message") %></td>
-                            <td><span class="status-<%= sms.get("status") %>"><%= sms.get("status") %></span></td>
-                            <td><%= sms.get("sentAt") %></td>
-                        </tr>
-                        <%
-                            }
-                        } else {
-                        %>
-                        <tr>
-                            <td colspan="4" class="text-center text-muted">No SMS history found</td>
-                        </tr>
-                        <% } %>
+                                <% List<?> smsList = (List<?>) request.getAttribute("smsHistory");
+                                if (smsList != null && !smsList.isEmpty()) {
+                                    for (Object item : smsList) {
+                                        java.util.Map<String, Object> sms = (java.util.Map<String, Object>) item;
+                                %>
+                                <tr>
+                                    <td><%= sms.get("from") %></td>
+                                    <td><%= sms.get("recipient") %></td>
+                                    <td><%= sms.get("message") %></td>
+                                    <td><span class="status-<%= sms.get("status") %>"><%= sms.get("status") %></span></td>
+                                    <td><%= sms.get("sentAt") %></td>
+                                </tr>
+                                <% }
+                                } else { %>
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">No SMS history found</td>
+                                </tr>
+                                <% } %>
                     </tbody>
                 </table>
             </div>

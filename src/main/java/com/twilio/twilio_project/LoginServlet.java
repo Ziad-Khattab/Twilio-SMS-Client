@@ -17,6 +17,14 @@ public class LoginServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            String registrationMessage = (String) session.getAttribute("registrationMessage");
+            if (registrationMessage != null) {
+                request.setAttribute("message", registrationMessage);
+                session.removeAttribute("registrationMessage");
+            }
+        }
         request.getRequestDispatcher("login.jsp").forward(request, response);
     }
 
@@ -32,7 +40,7 @@ public class LoginServlet extends HttpServlet {
             return;
         }
 
-        int userId = validateUser(username, password);
+        int userId = validateUser(username.trim(), password);
         if (userId > 0) {
             HttpSession session = request.getSession();
             session.setAttribute("userId", userId);
@@ -44,16 +52,15 @@ public class LoginServlet extends HttpServlet {
     }
 
     private int validateUser(String username, String password) {
-        String sql = "SELECT id FROM users WHERE username = ? AND password = ?";
+        String sql = "SELECT id, password_hash FROM users WHERE username = ?";
 
         try (Connection conn = DBUtil.getConnection();
                 PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setString(1, username);
-            pstmt.setString(2, password);
 
             try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
+                if (rs.next() && PasswordUtil.matches(password, rs.getString("password_hash"))) {
                     return rs.getInt("id");
                 }
             }

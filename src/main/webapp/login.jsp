@@ -66,13 +66,18 @@
                     <p>Access your Twilio SMS dashboard</p>
                 </div>
 
-                <% if (request.getAttribute("error") !=null) { %>
+                <% if (request.getAttribute("message") != null) { %>
+                    <div class="message success">
+                        <%= request.getAttribute("message") %>
+                    </div>
+                <% } %>
+                <% if (request.getAttribute("error") != null) { %>
                     <div class="message error">
                         <%= request.getAttribute("error") %>
                     </div>
-                    <% } %>
+                <% } %>
 
-                        <form action="login" method="post" class="auth-form">
+                <form action="login" method="post" class="auth-form">
                             <div class="form-group">
                                 <label for="username">Username</label>
                                 <input type="text" id="username" name="username" placeholder="Enter your username"
