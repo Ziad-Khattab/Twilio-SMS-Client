@@ -35,13 +35,13 @@ public class RegisterServlet extends HttpServlet {
         String confirmPassword = request.getParameter("confirm_password");
         String fullName = trim(request.getParameter("full_name"));
         String birthdayRaw = trim(request.getParameter("birthday"));
-        String msisdn = normalizePhone(trim(request.getParameter("msisdn")));
+        String msisdn = PhoneUtil.normalize(trim(request.getParameter("msisdn")));
         String job = trim(request.getParameter("job"));
         String email = trim(request.getParameter("email"));
         String address = trim(request.getParameter("address"));
         String twilioAccountSid = trim(request.getParameter("twilio_account_sid"));
         String twilioAuthToken = request.getParameter("twilio_auth_token");
-        String twilioSenderId = normalizePhone(trim(request.getParameter("twilio_sender_id")));
+        String twilioSenderId = PhoneUtil.normalize(trim(request.getParameter("twilio_sender_id")));
 
         preserveForm(request, username, fullName, birthdayRaw, msisdn, job, email, address,
                 twilioAccountSid, twilioSenderId);
@@ -93,7 +93,7 @@ public class RegisterServlet extends HttpServlet {
         String smsBody = "Your Twilio SMS verification code is: " + verificationCode;
 
         try {
-            TwilioSmsService.sendSms(twilioAccountSid, twilioAuthToken, twilioSenderId, msisdn, smsBody);
+            TwilioSmsService.send(twilioAccountSid, twilioAuthToken, twilioSenderId, msisdn, smsBody);
         } catch (Exception e) {
             e.printStackTrace();
             request.setAttribute("error",
@@ -150,14 +150,4 @@ public class RegisterServlet extends HttpServlet {
         return value == null || value.isEmpty();
     }
 
-    static String normalizePhone(String phone) {
-        if (phone == null || phone.isEmpty()) {
-            return phone;
-        }
-        String normalized = phone.replaceAll("\\s+", "");
-        if (!normalized.startsWith("+")) {
-            normalized = "+" + normalized;
-        }
-        return normalized;
-    }
 }

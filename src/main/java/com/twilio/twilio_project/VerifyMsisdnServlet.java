@@ -94,7 +94,7 @@ public class VerifyMsisdnServlet extends HttpServlet {
         String smsBody = "Your Twilio SMS verification code is: " + verificationCode;
 
         try {
-            TwilioSmsService.sendSms(
+            TwilioSmsService.send(
                     pending.getTwilioAccountSid(),
                     pending.getTwilioAuthToken(),
                     pending.getTwilioSenderId(),

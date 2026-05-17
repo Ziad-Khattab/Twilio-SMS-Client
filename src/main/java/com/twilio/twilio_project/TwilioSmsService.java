@@ -9,8 +9,8 @@ public final class TwilioSmsService {
     private TwilioSmsService() {
     }
 
-    public static void sendSms(String accountSid, String authToken, String from, String to, String body) {
+    public static Message send(String accountSid, String authToken, String from, String to, String body) {
         Twilio.init(accountSid, authToken);
-        Message.creator(new PhoneNumber(to), new PhoneNumber(from), body).create();
+        return Message.creator(new PhoneNumber(to), new PhoneNumber(from), body).create();
     }
 }
