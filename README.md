@@ -13,8 +13,6 @@
 
 Dual-provider SMS platform — **Twilio** and **SMPP** with per-user provider routing, real-time internal chat, admin broadcast, and profile-based environment configuration.
 
-
-
 ## Architecture
 
 ```
@@ -77,6 +75,16 @@ podman-compose --env-file .env up -d
 
 Set `APP_PROFILE=docker` in `.env` for container networking.
 
+### Verification
+
+```bash
+# After `mvn jetty:run`, confirm the server is alive:
+curl -s http://localhost:8080/login -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"123456"}'
+# Expected: {"status":"success","role":"administrator"}
+```
+
 ### Test Credentials
 
 | User | Password | Role | Provider |
@@ -86,12 +94,27 @@ Set `APP_PROFILE=docker` in `.env` for container networking.
 
 ## Features
 
-- **Dual SMS providers** — Twilio + SMPP with per-user routing (TWILIO / SMPP / AUTO)
-- **Real-time internal chat** — WebSocket between any two users, plus admin broadcast
-- **Admin debug panel** — SMPP event logs (persistent DB), Wireshark packet capture from browser
-- **SMS chat UI** — WhatsApp-style conversation threads with delivery status
-- **Profile-based env** — `APP_PROFILE=local|docker` switches SMPP host/port automatically
-- **Flyway migrations** — versioned, additive-only schema changes on every startup
+### Customer Dashboard
+- **SMS Chat UI** — WhatsApp-style conversation threads grouped by phone number. Dual-tone bubbles: outbound (cyan accent) on right, inbound (emerald accent) on left. Delivery status icons: pending (Check), delivered (CheckCheck green), failed (X red). Delete individual messages. 5-second auto-poll for new messages.
+- **New Conversation** — modal to start chat with any phone number (with country code).
+- **Profile Settings** — modal with Account Info (name, MSISDN, email, birthday, job, address, password change), Twilio credentials (SID, token, sender ID), and SMS Provider config (TWILIO/SMPP/AUTO selector + SMPP host/port/systemId/password/addressRange).
+- **Internal Chat** — real-time user-to-user messaging via WebSocket (`/ws/chat`). User list, conversation history, send/receive with auto-reconnect.
+- **System Messages** — tab showing admin broadcasts and system notifications.
+
+### Admin Dashboard
+- **Metric Cards** — Active Accounts count, Total Outbound SMS count. Real-time from server.
+- **Customer Directory** — searchable table with username, full name, MSISDN, email, job, outbound SMS count, created date. Per-row actions: Edit (full profile modal), SMS (per-customer history modal), Delete (with confirmation).
+- **SMS History Modal** — per-customer, chronologically sorted. OUTBOUND/INBOUND colored badges, recipient/sender phone, delivery status, close button.
+- **SMPP Logs Modal** — last 500 persistent events from `smpp_event_logs` table. Auto-refresh every 3s. Color-coded by severity (ERROR=red, WARN=yellow, INFO=green). Columns: timestamp, level, event type, detail (truncated at 180 chars).
+- **Broadcast Modal** — compose message, optional "send as real SMS" checkbox (routes via each user's configured provider). Shows push count on success.
+- **Broadcasts History** — scrollable list of recent broadcast messages with timestamps.
+- **Wireshark Capture** — start/stop `dumpcap` from browser. Live packet table via `tshark` polling (2s). Download raw PCAP file.
+
+### Platform
+- **Dual SMS Providers** — Twilio + SMPP with per-user routing (TWILIO / SMPP / AUTO). AUTO tries SMPP first, falls back to Twilio.
+- **Real-time Internal Chat** — WebSocket between any two users, plus admin broadcast.
+- **Profile-Based Environment** — `APP_PROFILE=local|docker` switches SMPP host/port automatically.
+- **Flyway Migrations** — versioned, additive-only schema changes on every startup.
 
 ## Provider Routing
 
@@ -204,9 +227,17 @@ curl -X POST http://localhost:12775/ \
 
 ## Database Migrations (Flyway)
 
-[Flyway](https://flywaydb.org/) applies versioned SQL migrations on every app startup. When you run the app, `DBUtil` calls `Flyway.migrate()` — Flyway checks a `flyway_schema_history` table in NeonDB, compares it against migration files in `src/main/resources/db/migration/`, and applies any new ones in order. Already-applied migrations are skipped (checksum-verified to detect tampering).
+[Flyway](https://flywaydb.org/) is a schema version control tool. On every app startup, `DBUtil.contextInitialized()` obtains a `DataSource` from HikariCP and calls `Flyway.migrate()`. Flyway:
 
-**When to create a migration**: anytime we change the DB schema — add a table, add a column, create an enum. Every migration must be **additive only** (no DROP, no ALTER without `IF NOT EXISTS`). This ensures all dev instances stay in sync regardless of which migrations they've already applied.
+1. Reads the `flyway_schema_history` table in NeonDB (tracks which migrations are already applied + their checksums)
+2. Scans migration files in `src/main/resources/db/migration/`, ordered by version number
+3. Compares — already-applied migrations are skipped (checksum-verified to detect tampering)
+4. Applies any new migrations in sequence
+5. Records each successful migration in `flyway_schema_history`
+
+**If a checksum mismatch occurs** (e.g., you edited an already-applied migration), Flyway errors on startup. Fix: create a new migration file instead of editing the old one, or if the old one truly needs replacing: `DELETE FROM flyway_schema_history WHERE version=N;` then restart.
+
+**When to create a migration**: any schema change — add a table, add a column, create an enum. All migrations must be **additive only** (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`). No destructive operations.
 
 | File | Adds |
 |------|------|
@@ -217,7 +248,7 @@ curl -X POST http://localhost:12775/ \
 | `V5__system_message_reads.sql` | Broadcast read tracking |
 | `V6__add_smpp_event_logs.sql` | `smpp_event_logs` table |
 
-Naming: `V{next_number}__{short_description}.sql`. Place in `src/main/resources/db/migration/`. Run via `mvn jetty:run` — Flyway executes on startup.
+Naming: `V{next_number}__{short_description}.sql`. Place in `src/main/resources/db/migration/`. `mvn jetty:run` → Flyway executes on startup.
 
 ## Security Model
 
@@ -236,13 +267,29 @@ WebSocket at `/ws/chat` (JSR 356) — authenticated via HTTP session. REST fallb
 
 ## Admin Panel
 
-| Feature | Endpoint | Description |
-|---------|----------|-------------|
-| Dashboard | `GET /admin/dashboard` | Customer list, SMS stats, counters |
-| Customer CRUD | `GET/POST /admin/customer` | Create/edit/delete accounts |
-| Broadcast | `POST /admin/broadcast` | Message all users (chat + optional SMS) |
-| SMPP Logs | `GET /admin/smpp-logs` | Last 500 persistent SMPP events (3s auto-refresh) |
-| Wireshark | `POST/GET /admin/wireshark/*` | Start/stop capture, live packet table, PCAP download |
+| Feature | Trigger | Backend | Behavior |
+|---------|---------|---------|----------|
+| Metric Cards | on load | `GET /admin/dashboard` | Active Accounts + Total Outbound SMS counters |
+| Customer Table | on load | `GET /admin/dashboard` | All customers with username, MSISDN, email, job, SMS count, created date |
+| Edit Customer | Edit button per row | `GET /admin/customer?id=N` → profile modal | Loads full profile, save via `POST /admin/customer` |
+| Create Customer | Create Customer button | `POST /admin/customer` | Empty form modal, same save endpoint |
+| Delete Customer | Delete button per row | `POST /admin/customer` with `{actionType:delete}` | Confirmation dialog before delete |
+| SMS History | SMS button per row | `GET /admin/customer?id=N&action=sms_history` | Modal: outbound + inbound messages sorted by time, colored OUTBOUND/INBOUND badges, status |
+| Broadcast | Broadcast button → modal | `POST /admin/broadcast` | Textarea + "send as SMS" checkbox. Returns push count. |
+| Broadcasts History | on load | `GET /api/chat/system?limit=100` | Scrollable list of past broadcasts with timestamps |
+| SMPP Logs | SMPP Logs button → modal | `GET /admin/smpp-logs` every 3s | Persistent DB logs, color-coded (ERROR=red, WARN=yellow, INFO=green), timestamp/event/detail columns |
+| Wireshark Capture | Wireshark button → modal | `POST/GET /admin/wireshark/*` | Start/stop `dumpcap`, live packet table via `tshark` (2s poll), PCAP download |
+
+## Customer Dashboard
+
+| Feature | Location | Backend | Behavior |
+|---------|----------|---------|----------|
+| SMS Chat | SMS tab (default) | `GET /dashboard` every 5s | Conversation sidebar + message thread. Dual-tone bubbles with status icons. Send via `POST /send-sms`. |
+| New Conversation | New Chat button → modal | — | Enter phone number → creates thread |
+| Delete Message | Trash icon per bubble | `POST /delete-sms` | Confirmation dialog |
+| Profile Settings | Edit Profile button → modal | `GET /profile` + `POST /profile` | Account Info, Twilio creds, SMS Provider config |
+| Internal Chat | Internal tab | WebSocket `/ws/chat` + `GET /api/chat/*` | Real-time user-to-user. User list, message history, send. Auto-reconnect. |
+| System Messages | System tab | `GET /api/chat/system` | Admin broadcasts and system notifications |
 
 ## API Endpoints
 
@@ -278,6 +325,26 @@ Database columns on `users` table (added by Flyway V4):
 | `twilio_account_sid` | `AC...` |
 | `twilio_auth_token` | `...` |
 | `twilio_sender_id` | `+13613221215` |
+
+## FAQ
+
+**Q: Jetty starts but browser shows blank page or 404.**
+A: You forgot to build the frontend. Run `cd frontend && npm install && npm run build && cd ..` then restart Jetty.
+
+**Q: SMS sends but DLR never arrives (SMPP).**
+A: smscsim container not running or wrong port. Check `podman ps | grep smscsim`. Default port is 2776 (host) → 2775 (container).
+
+**Q: MO (inbound SMS) not appearing in DB.**
+A: User's `msisdn` is NULL in the `users` table. Run `UPDATE users SET msisdn='+1234567890' WHERE id=N;` and try again.
+
+**Q: SLF4J warnings about NOP logger on startup.**
+A: Harmless. Jetty Maven Plugin isolates webapp classloader; `logback-classic` falls back to NOP. We use `slf4j-simple` — the warnings can be ignored.
+
+**Q: Registration via `/register` fails with "Gateway execution error".**
+A: Registration requires real Twilio credentials (sends a PIN SMS). Without them, it fails gracefully. Use the admin panel to create accounts instead.
+
+**Q: Jetty kill command?**
+A: `ps aux | grep "jetty:run" | awk '{print $2}' | xargs kill` — never use `lsof -ti:8080` (kills Firefox viewing the app).
 
 ## Project Structure
 
