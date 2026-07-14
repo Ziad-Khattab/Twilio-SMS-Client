@@ -35,7 +35,12 @@ public class DeleteSmsServlet extends HttpServlet {
         try {
             String body = UserRepository.readRequestBody(request);
             JsonObject json = gson.fromJson(body, JsonObject.class);
-            int smsId = json.get("smsId").getAsInt();
+            int smsId = json.has("smsId") ? json.get("smsId").getAsInt() : 0;
+            if (smsId <= 0) {
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                response.getWriter().write("{\"status\":\"error\",\"message\":\"Invalid SMS ID\"}");
+                return;
+            }
 
             UserRepository.deleteSmsByIdAndUserId(smsId, userId);
             response.getWriter().write("{\"status\":\"success\"}");

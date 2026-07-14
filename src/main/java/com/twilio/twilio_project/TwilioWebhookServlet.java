@@ -1,5 +1,6 @@
 package com.twilio.twilio_project;
 
+import com.twilio.security.RequestValidator;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -10,6 +11,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Map;
 
 @WebServlet(name = "twilioWebhookServlet", value = "/webhook/sms")
 public class TwilioWebhookServlet extends HttpServlet {
@@ -17,7 +19,36 @@ public class TwilioWebhookServlet extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        
+
+        String signature = request.getHeader("X-Twilio-Signature");
+        String authToken = EnvLoader.get("TWILIO_AUTH_TOKEN");
+
+        if (authToken != null && !authToken.isEmpty()) {
+            if (signature == null || signature.isEmpty()) {
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                response.getWriter().write("Missing X-Twilio-Signature");
+                return;
+            }
+
+            String fullUrl = request.getRequestURL().toString();
+            if (request.getQueryString() != null) {
+                fullUrl += "?" + request.getQueryString();
+            }
+
+            java.util.HashMap<String, String> flatParams = new java.util.HashMap<>();
+            for (Map.Entry<String, String[]> entry : request.getParameterMap().entrySet()) {
+                if (entry.getValue() != null && entry.getValue().length > 0) {
+                    flatParams.put(entry.getKey(), entry.getValue()[0]);
+                }
+            }
+            RequestValidator validator = new RequestValidator(authToken);
+            if (!validator.validate(fullUrl, flatParams, signature)) {
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                response.getWriter().write("Invalid webhook signature");
+                return;
+            }
+        }
+
         String from = request.getParameter("From");
         String to = request.getParameter("To");
         String body = request.getParameter("Body");

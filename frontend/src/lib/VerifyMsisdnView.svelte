@@ -9,7 +9,7 @@
 
   async function handleVerify(e) {
     e.preventDefault();
-    if (!code.trim() || code.trim().length !== 6) {
+    if (!/^\d{6}$/.test(code.trim())) {
       error = 'Please enter the 6-digit verification code';
       return;
     }

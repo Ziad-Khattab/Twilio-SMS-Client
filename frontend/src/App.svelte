@@ -6,40 +6,42 @@
   import CustomerDashboard from './lib/CustomerDashboard.svelte';
   import AdminDashboard from './lib/AdminDashboard.svelte';
 
-  // SPA Route State
-  let currentView = $state('login'); // login, register, verify-msisdn, customer-dashboard, admin-dashboard
+  let currentView = $state('login');
   let userRole = $state('');
   let userId = $state(null);
   let verifyingSession = $state(true);
 
+  function getViewFromPath(path) {
+    if (path === '/') return 'login';
+    if (path === '/register') return 'register';
+    if (path === '/verify') return 'verify-msisdn';
+    if (path === '/chat') return 'customer-dashboard';
+    if (path === '/admin/' || path === '/admin') return 'admin-dashboard';
+    return null;
+  }
+
+  function syncUrl() {
+    const pathMap = {
+      'login': '/',
+      'register': '/register',
+      'verify-msisdn': '/verify',
+      'customer-dashboard': '/chat',
+      'admin-dashboard': '/admin/'
+    };
+    const url = pathMap[currentView] || '/login';
+    if (window.location.pathname !== url) {
+      history.pushState({ view: currentView }, '', url);
+    }
+  }
+
   async function checkSession() {
     try {
-      // Fetch profile to see if session is active
       const res = await fetch('/profile');
       if (res.ok) {
         const data = await res.json();
-        // Since we are authenticated, determine role
-        // Wait, does /profile return role? Let's check:
-        // Actually, let's fetch /dashboard to see if we can login as customer, 
-        // or check /admin/dashboard to see if we are admin.
-        // Even simpler: we can try to fetch /dashboard first. If it succeeds, it's a customer.
-        // If it fails with 403, we can check if we can access /admin/dashboard.
-        
-        const dashRes = await fetch('/dashboard');
-        if (dashRes.ok) {
-          userRole = 'customer';
-          currentView = 'customer-dashboard';
-        } else {
-          const adminRes = await fetch('/admin/dashboard');
-          if (adminRes.ok) {
-            userRole = 'administrator';
-            currentView = 'admin-dashboard';
-          } else {
-            currentView = 'login';
-          }
-        }
+        userRole = data.role || '';
+        currentView = userRole === 'administrator' ? 'admin-dashboard' : 'customer-dashboard';
       } else {
-        // Not authenticated
         currentView = 'login';
       }
     } catch (err) {
@@ -47,31 +49,40 @@
       currentView = 'login';
     } finally {
       verifyingSession = false;
+      syncUrl();
     }
   }
 
   onMount(() => {
+    window.addEventListener('popstate', () => {
+      const path = window.location.pathname;
+      const viewFromPath = getViewFromPath(path);
+      if (viewFromPath) {
+        currentView = viewFromPath;
+      } else {
+        checkSession();
+      }
+    });
     checkSession();
   });
 
   function handleLoginSuccess(role, id) {
     userRole = role;
     userId = id;
-    if (role === 'administrator') {
-      currentView = 'admin-dashboard';
-    } else {
-      currentView = 'customer-dashboard';
-    }
+    currentView = role === 'administrator' ? 'admin-dashboard' : 'customer-dashboard';
+    syncUrl();
   }
 
   function handleLogout() {
     userRole = '';
     userId = null;
     currentView = 'login';
+    syncUrl();
   }
 
   function navigate(view) {
     currentView = view;
+    syncUrl();
   }
 </script>
 

@@ -70,7 +70,7 @@ public class VerifyMsisdnServlet extends HttpServlet {
         try {
             String body = UserRepository.readRequestBody(request);
             JsonObject json = gson.fromJson(body, JsonObject.class);
-            String code = json.get("code").getAsString().trim();
+            String code = json.has("code") ? json.get("code").getAsString().trim() : "";
 
             if (pending.isVerificationExpired()) {
                 session.removeAttribute(RegisterServlet.SESSION_PENDING_REGISTRATION);

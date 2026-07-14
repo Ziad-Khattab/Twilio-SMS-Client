@@ -2,7 +2,6 @@ package com.twilio.twilio_project;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.twilio.rest.api.v2010.account.Message;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -36,28 +35,33 @@ public class SendSmsServlet extends HttpServlet {
         try {
             String body = UserRepository.readRequestBody(request);
             JsonObject json = gson.fromJson(body, JsonObject.class);
-            String recipient = PhoneUtil.normalize(json.get("recipient").getAsString().trim());
-            String message = json.get("message").getAsString().trim();
+            String recipient = json.has("recipient") ? PhoneUtil.normalize(json.get("recipient").getAsString().trim()) : "";
+            String message = json.has("message") ? json.get("message").getAsString().trim() : "";
 
-            CustomerTwilioConfig twilio = UserRepository.findTwilioConfigByUserId(userId);
-            if (twilio == null || !twilio.isComplete()) {
+            if (recipient.isEmpty() || message.isEmpty()) {
                 response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                response.getWriter().write("{\"status\":\"error\",\"message\":\"Twilio credentials missing\"}");
+                response.getWriter().write("{\"status\":\"error\",\"message\":\"recipient and message are required\"}");
                 return;
             }
 
-            String fromPhone = PhoneUtil.normalize(twilio.getSenderId());
+            SmsResult result = SmsRouter.send(recipient, message, userId);
 
-            // Dispatch SMS via the official SDK wrapper!
-            Message msg = TwilioSmsService.send(
-                    twilio.getAccountSid(),
-                    twilio.getAuthToken(),
-                    fromPhone,
-                    recipient,
-                    message);
+            if (!result.isSuccess()) {
+                response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                response.getWriter().write("{\"status\":\"error\",\"message\":\"" + result.getError() + "\"}");
+                return;
+            }
 
-            String status = mapTwilioStatus(msg);
-            UserRepository.recordSms(userId, fromPhone, recipient, message, status);
+            String fromPhone = "";
+            try {
+                CustomerTwilioConfig cfg = UserRepository.findTwilioConfigByUserId(userId);
+                if (cfg != null && cfg.isComplete()) {
+                    fromPhone = PhoneUtil.normalize(cfg.getSenderId());
+                }
+            } catch (Exception ignored) {}
+            String status = result.getMessageId() != null ? "delivered" : "pending";
+            String providerRefId = result.getProviderRefId();
+            UserRepository.recordSms(userId, fromPhone, recipient, message, status, providerRefId);
 
             JsonObject success = new JsonObject();
             success.addProperty("status", "success");
@@ -67,14 +71,7 @@ public class SendSmsServlet extends HttpServlet {
         } catch (Exception e) {
             e.printStackTrace();
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            response.getWriter().write("{\"status\":\"error\",\"message\":\"Failed to send: " + e.getMessage() + "\"}");
+            response.getWriter().write("{\"status\":\"error\",\"message\":\"Failed to dispatch SMS. Check server logs.\"}");
         }
-    }
-
-    private static String mapTwilioStatus(Message msg) {
-        String twilioStatus = msg.getStatus().toString().toLowerCase();
-        if ("delivered".equals(twilioStatus)) { return "delivered"; }
-        if ("failed".equals(twilioStatus) || "undelivered".equals(twilioStatus)) { return "failed"; }
-        return "pending";
     }
 }

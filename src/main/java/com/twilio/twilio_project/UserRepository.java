@@ -116,7 +116,7 @@ public final class UserRepository {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Database error loading SMS history", e);
         }
         return history;
     }
@@ -126,8 +126,13 @@ public final class UserRepository {
      */
     public static void recordSms(int userId, String fromPhone, String toPhone, String message, String status)
             throws SQLException {
-        String sql = "INSERT INTO sms_history (user_id, from_phone, to_phone, message, status, direction) "
-                + "VALUES (?, ?, ?, ?, ?::message_status, 'outbound'::sms_direction)";
+        recordSms(userId, fromPhone, toPhone, message, status, null);
+    }
+
+    public static void recordSms(int userId, String fromPhone, String toPhone, String message, String status, String providerRefId)
+            throws SQLException {
+        String sql = "INSERT INTO sms_history (user_id, from_phone, to_phone, message, status, direction, provider_ref_id) "
+                + "VALUES (?, ?, ?, ?, ?::message_status, 'outbound'::sms_direction, ?)";
         try (Connection conn = DBUtil.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, userId);
@@ -135,6 +140,7 @@ public final class UserRepository {
             stmt.setString(3, toPhone);
             stmt.setString(4, message);
             stmt.setString(5, status);
+            stmt.setString(6, providerRefId);
             stmt.executeUpdate();
         }
     }
@@ -152,12 +158,58 @@ public final class UserRepository {
         }
     }
 
+    public static void saveInboundSms(int userId, String from, String to, String message) throws SQLException {
+        String sql = "INSERT INTO sms_history (user_id, from_phone, to_phone, message, status, direction) "
+                + "VALUES (?, ?, ?, ?, 'delivered'::message_status, 'inbound'::sms_direction)";
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, userId);
+            stmt.setString(2, from);
+            stmt.setString(3, to);
+            stmt.setString(4, message);
+            stmt.executeUpdate();
+        }
+    }
+
+    public static void updateSmsStatusByProviderRefId(String providerRefId, String status) throws SQLException {
+        String mapped = mapSmppStatus(status);
+        String sql = "UPDATE sms_history SET status = ?::message_status WHERE provider_ref_id = ?";
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, mapped);
+            stmt.setString(2, providerRefId);
+            stmt.executeUpdate();
+        }
+    }
+
+    private static String mapSmppStatus(String smppStatus) {
+        if (smppStatus == null) return "delivered";
+        return switch (smppStatus.toUpperCase()) {
+            case "DELIVRD", "ACCEPTD", "0" -> "delivered";
+            case "EXPIRED", "DELETED", "UNDELIV", "UNKNOWN", "REJECTD" -> "failed";
+            default -> "delivered";
+        };
+    }
+
+    public static int findUserIdByPhone(String phone) throws SQLException {
+        String sql = "SELECT id FROM users WHERE msisdn = ? LIMIT 1";
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, phone);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) return rs.getInt("id");
+            }
+        }
+        return -1;
+    }
+
     /**
      * Loads the profile details of an authenticated user.
      */
     public static Map<String, String> getUserProfile(int userId) throws SQLException {
         String sql = "SELECT username, full_name, birthday, msisdn, job, email, address, "
-                   + "twilio_account_sid, twilio_auth_token, twilio_sender_id "
+                   + "twilio_account_sid, twilio_sender_id, role, "
+                   + "sms_provider, smpp_host, smpp_port, smpp_system_id, smpp_address_range "
                    + "FROM users WHERE id = ?";
         try (Connection conn = DBUtil.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -175,9 +227,17 @@ public final class UserRepository {
                     profile.put("email", rs.getString("email"));
                     profile.put("address", rs.getString("address"));
                     profile.put("twilioSid", rs.getString("twilio_account_sid"));
-                    profile.put("twilioToken", rs.getString("twilio_auth_token"));
                     profile.put("twilioSender", rs.getString("twilio_sender_id"));
                     profile.put("twilioSenderId", rs.getString("twilio_sender_id")); // Redundant bridge key to support frontend 'twilioSenderId' property!
+                    profile.put("role", rs.getString("role"));
+                    profile.put("smsProvider", rs.getString("sms_provider"));
+                    profile.put("smppHost", rs.getString("smpp_host"));
+                    int smppPort = rs.getInt("smpp_port");
+                    if (!rs.wasNull()) {
+                        profile.put("smppPort", String.valueOf(smppPort));
+                    }
+                    profile.put("smppSystemId", rs.getString("smpp_system_id"));
+                    profile.put("smppAddressRange", rs.getString("smpp_address_range"));
                     return profile;
                 }
             }
@@ -215,8 +275,34 @@ public final class UserRepository {
             sql.append("twilio_auth_token = ?, "); params.add(profile.get("twilioToken"));
         }
         
-        sql.append("twilio_sender_id = ? "); params.add(profile.get("twilioSender"));
-        sql.append("WHERE id = ?");
+        sql.append("twilio_sender_id = ?, "); params.add(profile.get("twilioSender"));
+
+        if (profile.get("smsProvider") != null && !profile.get("smsProvider").isEmpty()) {
+            sql.append("sms_provider = ?, "); params.add(profile.get("smsProvider"));
+        }
+        if (profile.get("smppHost") != null) {
+            sql.append("smpp_host = ?, "); params.add(profile.get("smppHost"));
+        }
+        if (profile.get("smppPort") != null && !profile.get("smppPort").isEmpty()) {
+            sql.append("smpp_port = ?, "); params.add(Integer.parseInt(profile.get("smppPort")));
+        }
+        if (profile.get("smppSystemId") != null) {
+            sql.append("smpp_system_id = ?, "); params.add(profile.get("smppSystemId"));
+        }
+        if (profile.get("smppPassword") != null) {
+            sql.append("smpp_password = ?, "); params.add(profile.get("smppPassword"));
+        }
+        if (profile.get("smppAddressRange") != null) {
+            sql.append("smpp_address_range = ?, "); params.add(profile.get("smppAddressRange"));
+        }
+
+        // Remove trailing comma+space
+        int len = sql.length();
+        if (sql.charAt(len - 2) == ',') {
+            sql.setLength(len - 2);
+        }
+
+        sql.append(" WHERE id = ?");
         params.add(userId);
 
         try (Connection conn = DBUtil.getConnection();
@@ -297,10 +383,13 @@ public final class UserRepository {
     public static void createCustomerByAdmin(String username, String passwordHash, String fullName, 
                                              java.sql.Date birthday, String msisdn, String job, 
                                              String email, String address, String twilioSid, 
-                                             String twilioToken, String twilioSender) throws SQLException {
+                                             String twilioToken, String twilioSender,
+                                             String smsProvider, String smppHost, String smppPort,
+                                             String smppSystemId, String smppPassword, String smppAddressRange) throws SQLException {
         String sql = "INSERT INTO users (username, password_hash, role, full_name, birthday, msisdn, job, " +
-                     "email, address, twilio_account_sid, twilio_auth_token, twilio_sender_id, msisdn_validated) " +
-                     "VALUES (?, ?, 'customer'::user_role, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)";
+                     "email, address, twilio_account_sid, twilio_auth_token, twilio_sender_id, msisdn_validated, " +
+                     "sms_provider, smpp_host, smpp_port, smpp_system_id, smpp_password, smpp_address_range) " +
+                     "VALUES (?, ?, 'customer'::user_role, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?, ?)";
         try (Connection conn = DBUtil.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, username);
@@ -314,6 +403,16 @@ public final class UserRepository {
             stmt.setString(9, twilioSid);
             stmt.setString(10, twilioToken);
             stmt.setString(11, twilioSender);
+            stmt.setString(12, smsProvider != null && !smsProvider.isEmpty() ? smsProvider : null);
+            stmt.setString(13, smppHost != null && !smppHost.isEmpty() ? smppHost : null);
+            if (smppPort != null && !smppPort.isEmpty()) {
+                stmt.setObject(14, Integer.parseInt(smppPort));
+            } else {
+                stmt.setObject(14, null);
+            }
+            stmt.setString(15, smppSystemId != null && !smppSystemId.isEmpty() ? smppSystemId : null);
+            stmt.setString(16, smppPassword != null && !smppPassword.isEmpty() ? smppPassword : null);
+            stmt.setString(17, smppAddressRange != null && !smppAddressRange.isEmpty() ? smppAddressRange : null);
             stmt.executeUpdate();
         }
     }
@@ -340,8 +439,213 @@ public final class UserRepository {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Database error loading SMS history", e);
         }
         return inboundList;
+    }
+
+    // ── SMS Provider config ──
+
+    public static String findSmsProvider(int userId) {
+        String sql = "SELECT sms_provider FROM users WHERE id = ?";
+        try (Connection conn = DBUtil.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) return rs.getString("sms_provider");
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Database error reading sms_provider", e);
+        }
+        return "TWILIO";
+    }
+
+    public static String findSmppConfig(int userId, String field) {
+        String sql = "SELECT " + field + " FROM users WHERE id = ?";
+        try (Connection conn = DBUtil.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) return rs.getString(field);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Database error reading " + field, e);
+        }
+        return "";
+    }
+
+    // ── Internal chat ──
+
+    public static List<Map<String, Object>> findAllUsers(int excludeUserId) {
+        List<Map<String, Object>> users = new ArrayList<>();
+        String sql = "SELECT id, username, full_name, msisdn FROM users WHERE id != ? ORDER BY username";
+        try (Connection conn = DBUtil.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, excludeUserId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> u = new HashMap<>();
+                    u.put("id", rs.getInt("id"));
+                    u.put("username", rs.getString("username"));
+                    u.put("fullName", rs.getString("full_name"));
+                    u.put("msisdn", rs.getString("msisdn"));
+                    users.add(u);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Database error loading users", e);
+        }
+        return users;
+    }
+
+    public static int insertInternalMessage(int senderId, int recipientId, String content) throws SQLException {
+        String sql = "INSERT INTO internal_messages (sender_id, recipient_id, content) VALUES (?, ?, ?) RETURNING id";
+        try (Connection conn = DBUtil.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, senderId);
+            stmt.setInt(2, recipientId);
+            stmt.setString(3, content);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        }
+        return 0;
+    }
+
+    public static List<Map<String, Object>> getInternalMessages(int userId1, int userId2, int limit, int beforeId) {
+        List<Map<String, Object>> msgs = new ArrayList<>();
+        String sql = "SELECT im.id, im.sender_id, im.recipient_id, im.content, im.status, im.created_at, im.read_at, " +
+                     "s.username AS sender_username, r.username AS recipient_username " +
+                     "FROM internal_messages im " +
+                     "JOIN users s ON s.id = im.sender_id " +
+                     "JOIN users r ON r.id = im.recipient_id " +
+                     "WHERE ((im.sender_id = ? AND im.recipient_id = ?) OR (im.sender_id = ? AND im.recipient_id = ?)) " +
+                     (beforeId > 0 ? "AND im.id < ? " : "") +
+                     "ORDER BY im.created_at DESC LIMIT ?";
+        try (Connection conn = DBUtil.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            int idx = 1;
+            stmt.setInt(idx++, userId1);
+            stmt.setInt(idx++, userId2);
+            stmt.setInt(idx++, userId2);
+            stmt.setInt(idx++, userId1);
+            if (beforeId > 0) stmt.setInt(idx++, beforeId);
+            stmt.setInt(idx, limit);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("id", rs.getInt("id"));
+                    m.put("senderId", rs.getInt("sender_id"));
+                    m.put("recipientId", rs.getInt("recipient_id"));
+                    m.put("content", rs.getString("content"));
+                    m.put("status", rs.getString("status"));
+                    m.put("createdAt", rs.getTimestamp("created_at").toString());
+                    if (rs.getTimestamp("read_at") != null) m.put("readAt", rs.getTimestamp("read_at").toString());
+                    m.put("senderUsername", rs.getString("sender_username"));
+                    m.put("recipientUsername", rs.getString("recipient_username"));
+                    msgs.add(m);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Database error loading internal messages", e);
+        }
+        return msgs;
+    }
+
+    public static int getUnreadInternalCount(int userId) {
+        String sql = "SELECT COUNT(*) FROM internal_messages WHERE recipient_id = ? AND read_at IS NULL";
+        try (Connection conn = DBUtil.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Database error counting unread messages", e);
+        }
+        return 0;
+    }
+
+    public static void markInternalRead(int messageId, int userId) {
+        String sql = "UPDATE internal_messages SET read_at = NOW() WHERE id = ? AND recipient_id = ? AND read_at IS NULL";
+        try (Connection conn = DBUtil.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, messageId);
+            stmt.setInt(2, userId);
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Database error marking message read", e);
+        }
+    }
+
+    // ── System broadcast ──
+
+    public static int insertSystemMessage(String content) throws SQLException {
+        String sql = "INSERT INTO system_messages (content) VALUES (?) RETURNING id";
+        try (Connection conn = DBUtil.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, content);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        }
+        return 0;
+    }
+
+    public static List<Map<String, Object>> getSystemMessages(int userId, int limit) {
+        List<Map<String, Object>> msgs = new ArrayList<>();
+        String sql = "SELECT sm.id, sm.content, sm.created_at, COALESCE(smr.last_read_id, 0) AS last_read_id " +
+                     "FROM system_messages sm " +
+                     "LEFT JOIN system_message_reads smr ON smr.user_id = ? " +
+                     "ORDER BY sm.id DESC LIMIT ?";
+        try (Connection conn = DBUtil.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, userId);
+            stmt.setInt(2, limit);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("id", rs.getInt("id"));
+                    m.put("content", rs.getString("content"));
+                    m.put("createdAt", rs.getTimestamp("created_at").toString());
+                    m.put("read", rs.getLong("last_read_id") >= rs.getLong("id"));
+                    msgs.add(m);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Database error loading system messages", e);
+        }
+        return msgs;
+    }
+
+    public static int getUnreadSystemCount(int userId) {
+        String sql = "SELECT COUNT(*) FROM system_messages sm " +
+                     "LEFT JOIN system_message_reads smr ON smr.user_id = ? " +
+                     "WHERE smr.last_read_id IS NULL OR sm.id > smr.last_read_id";
+        try (Connection conn = DBUtil.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Database error counting system messages", e);
+        }
+        return 0;
+    }
+
+    public static void markSystemRead(int userId, long lastReadId) {
+        String sql = "INSERT INTO system_message_reads (user_id, last_read_id) VALUES (?, ?) " +
+                     "ON CONFLICT (user_id) DO UPDATE SET last_read_id = ?";
+        try (Connection conn = DBUtil.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, userId);
+            stmt.setLong(2, lastReadId);
+            stmt.setLong(3, lastReadId);
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Database error marking system read", e);
+        }
+    }
+
+    public static List<Integer> getAllCustomerUserIds() {
+        List<Integer> ids = new ArrayList<>();
+        String sql = "SELECT id FROM users WHERE role = 'customer'::user_role";
+        try (Connection conn = DBUtil.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) ids.add(rs.getInt(1));
+        } catch (SQLException e) {
+            throw new RuntimeException("Database error loading customer IDs", e);
+        }
+        return ids;
     }
 }

@@ -1,4 +1,5 @@
 <script>
+  import { UserPlus, ArrowLeft, ArrowRight, Smartphone, Shield } from 'lucide-svelte';
   let { navigate } = $props();
 
   let step = $state(1); // 1 = Profile details, 2 = Twilio config
@@ -20,7 +21,7 @@
 
   function nextStep() {
     // Basic validation for Step 1
-    if (!username.trim() || !password || !fullName.trim() || !msisdn.trim() || !email.trim()) {
+    if (!username.trim() || !password.trim() || !fullName.trim() || !msisdn.trim() || !email.trim()) {
       error = 'Please fill out all required fields marked with *';
       return;
     }
@@ -35,10 +36,6 @@
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!twilioSid.trim() || !twilioToken || !twilioSender.trim()) {
-      error = 'All Twilio configuration fields are required';
-      return;
-    }
 
     loading = true;
     error = '';
@@ -81,6 +78,7 @@
   <div class="card-glass w-full max-w-[540px] p-8 md:p-10">
     <div class="text-center mb-8">
       <div class="logo-container justify-center mb-2">
+        <UserPlus size={22} class="text-[var(--cyan)]" />
         <span>Twilio SMS</span>
         <div class="logo-dot"></div>
       </div>
@@ -146,25 +144,25 @@
 
         <button type="submit" class="btn btn-primary w-full py-3 mt-6">
           Next Step: Twilio Setup
+          <ArrowRight size={16} />
         </button>
       </form>
     {:else}
       <form onsubmit={handleSubmit}>
         <div class="form-group">
-          <label class="label" for="twilioSid">Twilio Account SID *</label>
+          <label class="label" for="twilioSid">Twilio Account SID</label>
           <input
             id="twilioSid"
             type="text"
             class="input font-mono"
             bind:value={twilioSid}
-            required
             placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
             disabled={loading}
           />
         </div>
 
         <div class="form-group">
-          <label class="label" for="twilioToken">Twilio Auth Token *</label>
+          <label class="label" for="twilioToken">Twilio Auth Token</label>
           <input
             id="twilioToken"
             type="password"
@@ -177,13 +175,12 @@
         </div>
 
         <div class="form-group mb-6">
-          <label class="label" for="twilioSender">Twilio Sender ID (Phone Number) *</label>
+          <label class="label" for="twilioSender">Twilio Sender ID (Phone Number)</label>
           <input
             id="twilioSender"
             type="text"
             class="input font-mono"
             bind:value={twilioSender}
-            required
             placeholder="+1xxxxxxxxxx"
             disabled={loading}
           />
@@ -192,12 +189,15 @@
 
         <div class="flex gap-4 mt-6">
           <button type="button" class="btn btn-secondary flex-1 py-3" onclick={prevStep} disabled={loading}>
+            <ArrowLeft size={16} />
             Back
           </button>
           <button type="submit" class="btn btn-primary flex-1 py-3" disabled={loading}>
             {#if loading}
+              <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
               Sending OTP...
             {:else}
+              <Smartphone size={16} />
               Verify Mobile
             {/if}
           </button>
