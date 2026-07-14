@@ -1,5 +1,7 @@
 package com.twilio.twilio_project;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -14,59 +16,71 @@ import java.sql.SQLException;
 
 @WebServlet(name = "loginServlet", value = "/login")
 public class LoginServlet extends HttpServlet {
-    @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        HttpSession session = request.getSession(false);
-        if (session != null) {
-            String registrationMessage = (String) session.getAttribute("registrationMessage");
-            if (registrationMessage != null) {
-                request.setAttribute("message", registrationMessage);
-                session.removeAttribute("registrationMessage");
-            }
-        }
-        request.getRequestDispatcher("login.jsp").forward(request, response);
+
+    private final Gson gson = new Gson();
+
+    private static class AuthResult {
+        int id;
+        String role;
+        AuthResult(int id, String role) { this.id = id; this.role = role; }
     }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        String username = request.getParameter("username");
-        String password = request.getParameter("password");
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
 
-        if (username == null || username.trim().isEmpty() || password == null || password.trim().isEmpty()) {
-            request.setAttribute("error", "Username and password are required");
-            request.getRequestDispatcher("login.jsp").forward(request, response);
-            return;
-        }
+        try {
+            String body = UserRepository.readRequestBody(request);
+            JsonObject json = gson.fromJson(body, JsonObject.class);
+            
+            if (json == null || !json.has("username") || !json.has("password")) {
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                response.getWriter().write("{\"status\":\"error\",\"message\":\"Missing credentials\"}");
+                return;
+            }
 
-        int userId = validateUser(username.trim(), password);
-        if (userId > 0) {
-            HttpSession session = request.getSession();
-            session.setAttribute("userId", userId);
-            response.sendRedirect("dashboard");
-        } else {
-            request.setAttribute("error", "Invalid username or password");
-            request.getRequestDispatcher("login.jsp").forward(request, response);
+            String username = json.get("username").getAsString().trim();
+            String password = json.get("password").getAsString();
+
+            AuthResult result = validateUser(username, password);
+
+            if (result != null) {
+                HttpSession session = request.getSession(true);
+                session.setAttribute("userId", result.id);
+                session.setAttribute("userRole", result.role);
+
+                JsonObject success = new JsonObject();
+                success.addProperty("status", "success");
+                success.addProperty("role", result.role);
+                success.addProperty("userId", result.id);
+                response.getWriter().write(gson.toJson(success));
+            } else {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.getWriter().write("{\"status\":\"error\",\"message\":\"Invalid username or password\"}");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            response.getWriter().write("{\"status\":\"error\",\"message\":\"Server error occurred\"}");
         }
     }
 
-    private int validateUser(String username, String password) {
-        String sql = "SELECT id, password_hash FROM users WHERE username = ?";
-
+    private AuthResult validateUser(String username, String password) {
+        String sql = "SELECT id, role, password_hash FROM users WHERE username = ?";
         try (Connection conn = DBUtil.getConnection();
-                PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, username);
-
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next() && PasswordUtil.matches(password, rs.getString("password_hash"))) {
-                    return rs.getInt("id");
+                    return new AuthResult(rs.getInt("id"), rs.getString("role"));
                 }
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return -1;
+        return null;
     }
 }

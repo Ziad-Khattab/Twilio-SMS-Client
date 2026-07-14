@@ -15,8 +15,9 @@ public class LogoutServlet extends HttpServlet {
             throws ServletException, IOException {
         HttpSession session = request.getSession(false);
         if (session != null) {
-            session.invalidate();
+            session.invalidate(); // Wipes current RAM memory allocation immediately!
         }
-        response.sendRedirect("login");
+        response.setContentType("application/json");
+        response.getWriter().write("{\"status\":\"success\"}");
     }
 }

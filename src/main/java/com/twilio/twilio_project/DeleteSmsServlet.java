@@ -1,5 +1,7 @@
 package com.twilio.twilio_project;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -11,31 +13,37 @@ import java.sql.SQLException;
 
 @WebServlet(name = "deleteSmsServlet", value = "/delete-sms")
 public class DeleteSmsServlet extends HttpServlet {
+
+    private final Gson gson = new Gson();
+
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("userId") == null) {
-            response.sendRedirect("login.jsp");
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.getWriter().write("{\"status\":\"error\",\"message\":\"Unauthorized\"}");
             return;
         }
 
         int userId = (int) session.getAttribute("userId");
-        String smsIdStr = request.getParameter("smsId");
 
-        if (smsIdStr != null && !smsIdStr.trim().isEmpty()) {
-            try {
-                int smsId = Integer.parseInt(smsIdStr.trim());
-                UserRepository.deleteSmsByIdAndUserId(smsId, userId);
-                session.setAttribute("smsSuccess", "SMS deleted successfully.");
-            } catch (NumberFormatException | SQLException e) {
-                e.printStackTrace();
-                session.setAttribute("smsError", "Failed to delete SMS.");
-            }
-        } else {
-            session.setAttribute("smsError", "Invalid SMS ID.");
+        try {
+            String body = UserRepository.readRequestBody(request);
+            JsonObject json = gson.fromJson(body, JsonObject.class);
+            int smsId = json.get("smsId").getAsInt();
+
+            UserRepository.deleteSmsByIdAndUserId(smsId, userId);
+            response.getWriter().write("{\"status\":\"success\"}");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            response.getWriter().write("{\"status\":\"error\",\"message\":\"Deletion failure\"}");
         }
-
-        response.sendRedirect("dashboard");
     }
 }

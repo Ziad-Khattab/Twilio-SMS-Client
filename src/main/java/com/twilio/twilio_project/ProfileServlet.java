@@ -1,5 +1,7 @@
 package com.twilio.twilio_project;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -13,67 +15,84 @@ import java.util.Map;
 
 @WebServlet(name = "profileServlet", value = "/profile")
 public class ProfileServlet extends HttpServlet {
+
+    private final Gson gson = new Gson();
+
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("userId") == null) {
-            response.sendRedirect("login.jsp");
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.getWriter().write("{\"status\":\"error\",\"message\":\"Unauthorized\"}");
             return;
         }
 
         int userId = (int) session.getAttribute("userId");
+
         try {
             Map<String, String> profile = UserRepository.getUserProfile(userId);
             if (profile != null) {
-                request.setAttribute("profile", profile);
-                request.getRequestDispatcher("profile.jsp").forward(request, response);
+                response.getWriter().write(gson.toJson(profile));
             } else {
-                response.sendRedirect("dashboard");
+                response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                response.getWriter().write("{\"status\":\"error\",\"message\":\"Profile not found\"}");
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            response.sendRedirect("dashboard");
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            response.getWriter().write("{\"status\":\"error\",\"message\":\"Server database failure\"}");
         }
     }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("userId") == null) {
-            response.sendRedirect("login.jsp");
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.getWriter().write("{\"status\":\"error\",\"message\":\"Unauthorized\"}");
             return;
         }
 
         int userId = (int) session.getAttribute("userId");
-        Map<String, String> profile = new HashMap<>();
-        
-        profile.put("fullName", request.getParameter("fullName"));
-        profile.put("birthday", request.getParameter("birthday"));
-        profile.put("msisdn", request.getParameter("msisdn"));
-        profile.put("job", request.getParameter("job"));
-        profile.put("email", request.getParameter("email"));
-        profile.put("address", request.getParameter("address"));
-        profile.put("twilioSid", request.getParameter("twilioSid"));
-        profile.put("twilioToken", request.getParameter("twilioToken"));
-        profile.put("twilioSender", request.getParameter("twilioSender"));
-
-        String password = request.getParameter("password");
-        if (password != null && !password.trim().isEmpty()) {
-            profile.put("passwordHash", PasswordUtil.hash(password));
-        }
 
         try {
-            UserRepository.updateUserProfile(userId, profile);
-            request.setAttribute("successMessage", "Profile updated successfully.");
-            request.setAttribute("profile", UserRepository.getUserProfile(userId));
-        } catch (SQLException e) {
-            e.printStackTrace();
-            request.setAttribute("errorMessage", "Error updating profile.");
-            request.setAttribute("profile", profile);
-        }
+            String body = UserRepository.readRequestBody(request);
+            JsonObject json = gson.fromJson(body, JsonObject.class);
 
-        request.getRequestDispatcher("profile.jsp").forward(request, response);
+            Map<String, String> profile = new HashMap<>();
+            profile.put("fullName", json.get("fullName").getAsString());
+            profile.put("birthday", json.get("birthday").getAsString());
+            profile.put("msisdn", json.get("msisdn").getAsString());
+            profile.put("job", json.get("job").getAsString());
+            profile.put("email", json.get("email").getAsString());
+            profile.put("address", json.get("address").getAsString());
+            profile.put("twilioSid", json.get("twilioSid").getAsString());
+            profile.put("twilioSender", json.get("twilioSender").getAsString());
+
+            if (json.has("password") && !json.get("password").getAsString().trim().isEmpty()) {
+                profile.put("passwordHash", PasswordUtil.hash(json.get("password").getAsString()));
+            }
+            if (json.has("twilioToken") && !json.get("twilioToken").getAsString().trim().isEmpty()) {
+                profile.put("twilioToken", json.get("twilioToken").getAsString());
+            }
+
+            UserRepository.updateUserProfile(userId, profile);
+            response.getWriter().write("{\"status\":\"success\"}");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            response.getWriter().write("{\"status\":\"error\",\"message\":\"Failed to commit profile updates\"}");
+        }
     }
 }
