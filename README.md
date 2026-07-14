@@ -99,32 +99,15 @@ podman build -t localhost/smscsim-fixed .
 
 ### SMPP Flow
 
-```
-App BIND_TRX ───────────────────────────────────► smscsim:2776
-                                                    │
-  ┌────── MT (Outbound) ──────┐                    │
-  │ POST /send-sms             │                    │
-  │  → SmsRouter.send()        │                    │
-  │  → SmppSessionManager      │                    │
-  │  → session.submitShortMessage() ──► SUBMIT_SM ──┤
-  │                            │    ◄── SUBMIT_SM_RESP + msg_id
-  │                            │    ◄── DLR after ~2s (esm_class=4)
-  │                            │         → parse DeliveryReceipt(id, status)
-  │                            │         → UserRepository.updateSmsStatusByProviderRefId()
-  │                            │
-  └────── MO (Inbound) ──────┐│                    │
-   POST http://localhost:12775/ │                    │
-   → system_id=smppclient   ││                    │
-                             │◄── DELIVER_SM ──────┤
-                             │    → decodeShortMessage(ucs2→utf16)
-                             │    → findUserIdByPhone(recipient)
-                             │    → saveInboundSms()
-                             │    → send DELIVER_SM_RESP
-```
+<img src="assets/smpp-flow.svg" alt="SMPP Flow Diagram" width="100%" max-width="900px"/>
 
 ### DLR (Delivery Receipts)
 
 Returned ~2s after SUBMIT_SM when `registered_delivery=1`. jsmpp `DeliveryReceipt` parser extracts message ID and final status (`DELIVRD`/`UNDELIV`). Status mapped to `message_status` enum and written to `sms_history.provider_ref_id` row.
+
+## Inbound SMS Flow (Twilio)
+
+<img src="assets/inbound-sms-flow.svg" alt="Twilio Inbound SMS Flow Diagram" width="100%" max-width="850px"/>
 
 ### Sending MO via Web UI
 

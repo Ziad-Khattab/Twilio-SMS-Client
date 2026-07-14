@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 620" font-family="'Segoe UI',Arial,sans-serif" font-size="13">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#555"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#16a34a"/>
+    </marker>
+    <marker id="arrow-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#ea580c"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="620" fill="#f8fafc" rx="8"/>
+
+  <!-- Title -->
+  <text x="450" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#1e293b">SMPP Message Flow</text>
+
+  <!-- App Box -->
+  <rect x="40" y="55" width="200" height="240" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="140" y="80" text-anchor="middle" font-weight="bold" fill="#1e3a5f">Your App (Java)</text>
+  <text x="140" y="100" text-anchor="middle" font-size="11" fill="#475569">SmppSessionManager</text>
+  <text x="140" y="115" text-anchor="middle" font-size="11" fill="#475569">SmsRouter</text>
+  <text x="140" y="130" text-anchor="middle" font-size="11" fill="#475569">SmpEventLogger (DB)</text>
+
+  <!-- SMSC Box -->
+  <rect x="580" y="55" width="200" height="240" rx="10" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+  <text x="680" y="80" text-anchor="middle" font-weight="bold" fill="#78350f">SMSC Simulator</text>
+  <text x="680" y="100" text-anchor="middle" font-size="11" fill="#92400e">localhost:2776</text>
+  <text x="680" y="115" text-anchor="middle" font-size="11" fill="#92400e">ukarim/smscsim</text>
+
+  <!-- Connection phase -->
+  <!-- BIND_TRX arrow -->
+  <line x1="240" y1="110" x2="575" y2="110" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="410" y="103" text-anchor="middle" font-weight="bold" fill="#2563eb" font-size="12">BIND_TRX</text>
+  <text x="410" y="125" text-anchor="middle" font-size="10" fill="#64748b">← BIND_TRX_RESP (ok) →</text>
+
+  <!-- MT Section -->
+  <rect x="40" y="160" width="740" height="1" fill="#cbd5e1" rx="0"/>
+
+  <!-- MT Arrow -->
+  <line x1="240" y1="200" x2="575" y2="200" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <text x="410" y="190" text-anchor="middle" font-weight="bold" fill="#16a34a" font-size="12">SUBMIT_SM (MT)</text>
+  <text x="410" y="210" text-anchor="middle" font-size="10" fill="#64748b">← SUBMIT_SM_RESP + msg_id →</text>
+
+  <!-- DLR Arrow (delayed) -->
+  <line x1="575" y1="230" x2="240" y2="230" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+  <text x="410" y="225" text-anchor="middle" font-weight="bold" fill="#ea580c" font-size="12">DELIVER_SM (DLR) ~2s later</text>
+  <text x="410" y="245" text-anchor="middle" font-size="10" fill="#64748b">esm_class=4, DeliveryReceipt(id, status)</text>
+
+  <!-- NEON DB -->
+  <rect x="290" y="280" width="200" height="45" rx="8" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="1.5"/>
+  <text x="390" y="305" text-anchor="middle" font-size="12" font-weight="bold" fill="#0369a1">NeonDB (PostgreSQL)</text>
+  <text x="390" y="318" text-anchor="middle" font-size="10" fill="#475569">sms_history · smpp_event_logs</text>
+
+  <!-- App to DB arrows -->
+  <line x1="240" y1="290" x2="286" y2="296" stroke="#0ea5e9" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="260" y="285" font-size="9" fill="#64748b">log event</text>
+
+  <!-- MO Section -->
+  <!-- MO Header bg -->
+  <rect x="40" y="340" width="740" height="1" fill="#cbd5e1" rx="0"/>
+
+  <!-- External sender box -->
+  <rect x="40" y="365" width="140" height="50" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="110" y="390" text-anchor="middle" font-size="12" font-weight="bold" fill="#334155">External Sender</text>
+  <text x="110" y="405" text-anchor="middle" font-size="10" fill="#64748b">SMS to app</text>
+
+  <!-- Web UI box (smscsim) -->
+  <rect x="580" y="360" width="200" height="60" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+  <text x="680" y="382" text-anchor="middle" font-size="12" font-weight="bold" fill="#78350f">smscsim Web UI</text>
+  <text x="680" y="398" text-anchor="middle" font-size="10" fill="#92400e">POST localhost:12775</text>
+  <text x="680" y="412" text-anchor="middle" font-size="10" fill="#92400e">system_id=smppclient</text>
+
+  <!-- External → smscsim -->
+  <line x1="180" y1="390" x2="576" y2="388" stroke="#ea580c" stroke-width="1.5" marker-end="url(#arrow-orange)" stroke-dasharray="6,3"/>
+  <text x="380" y="380" text-anchor="middle" font-size="10" fill="#ea580c" font-weight="bold">MO via Web UI</text>
+
+  <!-- SMSC → App (DELIVER_SM MO) -->
+  <line x1="580" y1="420" x2="240" y2="420" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+  <text x="410" y="415" text-anchor="middle" font-weight="bold" fill="#ea580c" font-size="12">DELIVER_SM (MO)</text>
+
+  <!-- MO processing in App -->
+  <rect x="40" y="440" width="200" height="70" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="140" y="460" text-anchor="middle" font-size="11" font-weight="bold" fill="#1e3a5f">MO Processing</text>
+  <text x="140" y="477" text-anchor="middle" font-size="10" fill="#475569">decodeShortMessage</text>
+  <text x="140" y="492" text-anchor="middle" font-size="10" fill="#475569">findUserIdByPhone</text>
+  <text x="140" y="507" text-anchor="middle" font-size="10" fill="#475569">saveInboundSms</text>
+
+  <!-- Legend -->
+  <rect x="480" y="470" width="380" height="130" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="670" y="490" text-anchor="middle" font-weight="bold" fill="#334155" font-size="12">Legend</text>
+  <line x1="500" y1="508" x2="560" y2="508" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="570" y="512" font-size="11" fill="#475569">Bind / Connection</text>
+  <line x1="500" y1="530" x2="560" y2="530" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <text x="570" y="534" font-size="11" fill="#475569">SUBMIT_SM (MT)</text>
+  <line x1="500" y1="552" x2="560" y2="552" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+  <text x="570" y="556" font-size="11" fill="#475569">DELIVER_SM (DLR / MO)</text>
+  <line x1="500" y1="574" x2="560" y2="574" stroke="#0ea5e9" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="570" y="578" font-size="11" fill="#475569">DB write (event log)</text>
+
+  <!-- DB connection -->
+  <line x1="390" y1="330" x2="390" y2="365" stroke="#0ea5e9" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <line x1="140" y1="510" x2="140" y2="530" stroke="#0ea5e9" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="145" y="530" font-size="9" fill="#64748b">save SMS</text>
+</svg>
