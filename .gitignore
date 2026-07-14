@@ -35,6 +35,5 @@ studying/
 users.csv
 target/
 .env.local
-ONBOARDING.md
 .vscode/
 ### VS Code ###
