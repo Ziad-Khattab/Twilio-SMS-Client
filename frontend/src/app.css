@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+@theme {
+  --color-cyan: #00f2ff;
+  --color-emerald: #10b981;
+  --color-red: #ef4444;
+  --color-accent: #F22F46;
+  --color-bg: #000000;
+  --color-bg-card: rgba(255, 255, 255, 0.03);
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #9ca3af;
+  --color-text-muted: #6b7280;
+  --radius-card: 12px;
+  --radius-card-lg: 20px;
+  --radius-card-sm: 8px;
+}
+
 :root {
   --cyan: #00f2ff;
   --emerald: #10b981;
@@ -69,6 +85,7 @@ body {
   transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   overflow: hidden;
+  padding: 1.5rem;
 }
 
 .card-glass::before {
@@ -248,30 +265,6 @@ tr:last-child td {
 }
 
 /* Chat bubble styling for conversations */
-.chat-window {
-  display: flex;
-  height: 600px;
-  background: rgba(255, 255, 255, 0.01);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-}
-
-.contacts-panel {
-  width: 320px;
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  background: rgba(0, 0, 0, 0.2);
-}
-
-.messages-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: rgba(0, 0, 0, 0.4);
-}
-
 .contact-item {
   padding: 1rem;
   border-bottom: 1px solid var(--border);
@@ -297,15 +290,6 @@ tr:last-child td {
   font-family: monospace;
 }
 
-.message-list {
-  flex: 1;
-  padding: 1.5rem;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
 .message-bubble {
   max-width: 65%;
   padding: 0.75rem 1rem;
@@ -317,7 +301,6 @@ tr:last-child td {
   text-align: left;
 }
 
-/* Outbound gradient glow */
 .message-bubble.outbound {
   align-self: flex-end;
   background: linear-gradient(135deg, rgba(0, 242, 255, 0.15) 0%, rgba(16, 185, 129, 0.1) 100%);
@@ -326,7 +309,6 @@ tr:last-child td {
   border-bottom-right-radius: 2px;
 }
 
-/* Inbound glassmorphic gray/sage */
 .message-bubble.inbound {
   align-self: flex-start;
   background: rgba(255, 255, 255, 0.04);
@@ -386,7 +368,6 @@ tr:last-child td {
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
-/* Metric Cards */
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -395,7 +376,6 @@ tr:last-child td {
 }
 
 .metric-card {
-  padding: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -456,3 +436,58 @@ tr:last-child td {
   padding: 2rem;
   text-align: center;
 }
+
+.error-msg {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--red);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tab-btn:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tab-btn.tab-active {
+  color: var(--cyan);
+  background: rgba(0, 242, 255, 0.08);
+}
+

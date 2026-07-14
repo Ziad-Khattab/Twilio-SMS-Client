@@ -17,6 +17,13 @@
   let twilioToken = $state('');
   let twilioSender = $state('');
 
+  let smsProvider = $state('');
+  let smppHost = $state('');
+  let smppPort = $state('');
+  let smppSystemId = $state('');
+  let smppPassword = $state('');
+  let smppAddressRange = $state('');
+
   let isEditMode = $derived(!!customer.id);
 
   // Sync state when customer prop changes or modal opens
@@ -33,6 +40,12 @@
       twilioSender = customer.twilioSender || '';
       password = '';
       twilioToken = '';
+      smsProvider = customer.smsProvider || '';
+      smppHost = customer.smppHost || '';
+      smppPort = customer.smppPort || '';
+      smppSystemId = customer.smppSystemId || '';
+      smppPassword = '';
+      smppAddressRange = customer.smppAddressRange || '';
       error = '';
     }
   });
@@ -44,8 +57,13 @@
       return;
     }
 
-    if (!isEditMode && (!password || !twilioToken)) {
-      error = 'Password and Twilio Auth Token are required for new accounts';
+    if (!isEditMode && !password) {
+      error = 'Password is required for new accounts';
+      return;
+    }
+
+    if (msisdn.trim() && msisdn.trim().length < 4) {
+      error = 'MSISDN must be at least 4 characters';
       return;
     }
 
@@ -62,7 +80,12 @@
       email: email.trim(),
       address: address.trim(),
       twilioSid: twilioSid.trim(),
-      twilioSender: twilioSender.trim()
+      twilioSender: twilioSender.trim(),
+      smsProvider,
+      smppHost: smppHost.trim(),
+      smppPort: smppPort.trim(),
+      smppSystemId: smppSystemId.trim(),
+      smppAddressRange: smppAddressRange.trim()
     };
 
     if (isEditMode) {
@@ -74,6 +97,9 @@
     }
     if (twilioToken) {
       payload.twilioToken = twilioToken;
+    }
+    if (smppPassword) {
+      payload.smppPassword = smppPassword;
     }
 
     try {
@@ -100,8 +126,9 @@
 </script>
 
 {#if isOpen}
-  <div class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-    <div class="card-glass w-full max-w-[600px] p-6 my-8 animate-fade text-left">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto" onkeydown={(e) => e.key === 'Escape' && onClose()}>
+    <div class="card-glass w-full max-w-[600px] p-6 my-8 animate-fade text-left" role="dialog" aria-modal="true" aria-label={isEditMode ? 'Edit Customer Settings' : 'Create New Customer'}>
       <div class="flex justify-between items-center mb-6 pb-2 border-b border-[var(--border)]">
         <h3 class="font-bold text-lg text-white">
           {isEditMode ? 'Edit Customer Settings' : 'Create New Customer'}
@@ -161,12 +188,46 @@
             <input id="adminCustTwilioSid" type="text" class="input font-mono" bind:value={twilioSid} placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" disabled={loading} />
           </div>
           <div class="form-group">
-            <label class="label" for="adminCustTwilioToken">Twilio Auth Token {isEditMode ? '(blank to keep current)' : '*'}</label>
-            <input id="adminCustTwilioToken" type="password" class="input font-mono" bind:value={twilioToken} required={!isEditMode} placeholder="Auth Token" disabled={loading} />
+            <label class="label" for="adminCustTwilioToken">Twilio Auth Token {isEditMode ? '(blank to keep current)' : '(optional — only if using Twilio SMS)'}</label>
+            <input id="adminCustTwilioToken" type="password" class="input font-mono" bind:value={twilioToken} placeholder="Auth Token" disabled={loading} />
           </div>
           <div class="form-group">
             <label class="label" for="adminCustTwilioSender">Twilio Sender ID (Phone Number)</label>
             <input id="adminCustTwilioSender" type="text" class="input font-mono" bind:value={twilioSender} placeholder="+1xxxxxxxxxx" disabled={loading} />
+          </div>
+        </div>
+
+        <h4 class="text-xs font-bold uppercase tracking-wider text-[var(--cyan)] mb-4 border-t border-[var(--border)] pt-4">SMS Provider</h4>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div class="form-group">
+            <label class="label" for="adminCustSmsProvider">Provider</label>
+            <select id="adminCustSmsProvider" class="input" bind:value={smsProvider} disabled={loading}>
+              <option value="">Default (Twilio)</option>
+              <option value="TWILIO">Twilio</option>
+              <option value="SMPP">SMPP</option>
+              <option value="AUTO">Auto (SMPP → Twilio)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="label" for="adminCustSmppHost">SMSC Host</label>
+            <input id="adminCustSmppHost" type="text" class="input font-mono" bind:value={smppHost} placeholder="e.g. 127.0.0.1" disabled={loading} />
+          </div>
+          <div class="form-group">
+            <label class="label" for="adminCustSmppPort">SMSC Port</label>
+            <input id="adminCustSmppPort" type="number" class="input font-mono" bind:value={smppPort} placeholder="2776" disabled={loading} />
+          </div>
+          <div class="form-group">
+            <label class="label" for="adminCustSmppSystemId">System ID</label>
+            <input id="adminCustSmppSystemId" type="text" class="input font-mono" bind:value={smppSystemId} disabled={loading} />
+          </div>
+          <div class="form-group">
+            <label class="label" for="adminCustSmppPassword">SMPP Password {isEditMode ? '(blank to keep current)' : ''}</label>
+            <input id="adminCustSmppPassword" type="password" class="input font-mono" bind:value={smppPassword} disabled={loading} />
+          </div>
+          <div class="form-group">
+            <label class="label" for="adminCustSmppAddrRange">Address Range (Sender ID)</label>
+            <input id="adminCustSmppAddrRange" type="text" class="input font-mono" bind:value={smppAddressRange} disabled={loading} />
           </div>
         </div>
 

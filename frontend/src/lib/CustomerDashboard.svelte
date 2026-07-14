@@ -1,5 +1,8 @@
 <script>
   import { onMount } from 'svelte';
+  import { MessageSquare, Plus, Trash2, Check, CheckCheck, X, Send, LogOut, User, Settings, Phone, Users } from 'lucide-svelte';
+  import InternalChat from './InternalChat.svelte';
+  import SystemConversation from './SystemConversation.svelte';
 
   let { onLogout } = $props();
 
@@ -25,6 +28,9 @@
   let profileError = $state('');
   let profileSuccess = $state('');
   let profileSaving = $state(false);
+
+  // Tab state
+  let chatMode = $state('sms');
 
   // Grouped conversations
   // Key: phone number, Value: array of messages sorted by sentAt
@@ -119,12 +125,18 @@
     }
   }
 
+  async function pollDashboard() {
+    await fetchDashboard();
+    pollTimer = setTimeout(pollDashboard, 5000);
+  }
+
+  let pollTimer;
+
   onMount(() => {
-    fetchDashboard();
-    
-    // Poll for new messages every 5 seconds
-    const interval = setInterval(fetchDashboard, 5000);
-    return () => clearInterval(interval);
+    fetchDashboard().then(() => {
+      pollTimer = setTimeout(pollDashboard, 5000);
+    });
+    return () => clearTimeout(pollTimer);
   });
 
   async function handleSend(e) {
@@ -248,18 +260,22 @@
     <!-- Header -->
     <header class="nav-bar">
       <div class="logo-container">
+        <MessageSquare size={22} class="text-[var(--cyan)]" />
         <span>Twilio Messaging</span>
         <div class="logo-dot"></div>
       </div>
       
       <div class="flex items-center gap-3">
         <span class="text-sm text-[var(--text-secondary)] hidden md:inline">
-          Logged in as: <strong class="text-white">{profile.fullName || profile.username}</strong>
+          <User size={14} class="inline mr-1" />
+          <strong class="text-white">{profile.fullName || profile.username}</strong>
         </span>
         <button class="btn btn-secondary" onclick={openProfileModal}>
+          <Settings size={14} />
           Edit Profile
         </button>
         <button class="btn btn-danger" onclick={handleLogout}>
+          <LogOut size={14} />
           Logout
         </button>
       </div>
@@ -274,14 +290,32 @@
         {error}
       </div>
     {:else}
+      <!-- Tab Bar -->
+      <div class="flex gap-1 mb-4 bg-white/[0.03] rounded-lg p-1 self-start">
+        <button class="tab-btn {chatMode === 'sms' ? 'tab-active' : ''}" onclick={() => chatMode = 'sms'}>
+          <Phone size={14} />
+          SMS
+        </button>
+        <button class="tab-btn {chatMode === 'internal' ? 'tab-active' : ''}" onclick={() => chatMode = 'internal'}>
+          <Users size={14} />
+          Internal
+        </button>
+        <button class="tab-btn {chatMode === 'system' ? 'tab-active' : ''}" onclick={() => chatMode = 'system'}>
+          <MessageSquare size={14} />
+          System
+        </button>
+      </div>
+
+      {#if chatMode === 'sms'}
       <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-grow items-stretch mb-6">
         
         <!-- Left Panel: Chat List / Contacts -->
-        <div class="lg:col-span-1 card-glass flex flex-col min-h-[500px]">
+        <div class="lg:col-span-1 card-glass p-0 flex flex-col min-h-[500px]">
           <div class="p-4 border-b border-[var(--border)] flex justify-between items-center bg-white/[0.02]">
             <span class="font-bold text-sm tracking-wide uppercase text-[var(--text-secondary)]">Conversations</span>
             <button class="btn btn-primary p-2 text-xs" onclick={() => isNewChatModalOpen = true}>
-              + New Chat
+              <Plus size={14} />
+              New Chat
             </button>
           </div>
 
@@ -305,7 +339,7 @@
         </div>
 
         <!-- Right Panel: Message Feed -->
-        <div class="lg:col-span-3 card-glass flex flex-col min-h-[500px]">
+        <div class="lg:col-span-3 card-glass p-0 flex flex-col min-h-[500px]">
           {#if activeContact}
             <!-- Thread Title -->
             <div class="p-4 border-b border-[var(--border)] bg-white/[0.02] flex items-center justify-between">
@@ -330,11 +364,11 @@
                       <span>{new Date(msg.sentAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                       {#if msg.direction === 'outbound'}
                         {#if msg.status === 'delivered'}
-                          <span class="text-[var(--emerald)]" title="Delivered">✓✓</span>
+                          <span class="text-[var(--emerald)]" title="Delivered"><CheckCheck size={14} /></span>
                         {:else if msg.status === 'failed'}
-                          <span class="text-[var(--red)]" title="Failed">✕</span>
+                          <span class="text-[var(--red)]" title="Failed"><X size={14} /></span>
                         {:else}
-                          <span class="text-[var(--cyan)]" title="Pending">✓</span>
+                          <span class="text-[var(--cyan)]" title="Pending"><Check size={14} /></span>
                         {/if}
                       {/if}
                       <button
@@ -342,7 +376,7 @@
                         onclick={() => handleDeleteMessage(msg.id, msg.direction)}
                         title="Delete log"
                       >
-                        🗑
+                        <Trash2 size={12} />
                       </button>
                     </div>
                   </div>
@@ -366,18 +400,21 @@
                 bind:value={newMessage}
                 disabled={sending}
                 required
+                aria-label="Type your message"
               />
               <button type="submit" class="btn btn-primary px-6" disabled={sending || !newMessage.trim()}>
                 {#if sending}
+                  <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                   Sending...
                 {:else}
+                  <Send size={16} />
                   Send
                 {/if}
               </button>
             </form>
           {:else}
             <div class="empty-state">
-              <span class="text-3xl mb-2">💬</span>
+              <MessageSquare size={40} class="text-[var(--text-muted)] mb-2" />
               <span>No chat selected</span>
               <p class="text-sm text-[var(--text-muted)] max-w-xs mt-2">
                 Select an existing conversation thread from the sidebar or click "New Chat" to dispatch a message.
@@ -386,32 +423,44 @@
           {/if}
         </div>
 
-      </div>
+      </div> <!-- end sms grid -->
+
+      {/if}
+      {#if chatMode === 'internal'}
+        <InternalChat />
+      {/if}
+      {#if chatMode === 'system'}
+        <SystemConversation />
+      {/if}
     {/if}
   </div>
 </div>
 
 <!-- Modal: New Chat -->
 {#if isNewChatModalOpen}
-  <div class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="card-glass w-full max-w-[400px] p-6 animate-fade">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onkeydown={(e) => e.key === 'Escape' && (isNewChatModalOpen = false)}>
+    <div class="card-glass w-full max-w-[400px] p-6 animate-fade" role="dialog" aria-modal="true" aria-labelledby="new-chat-title">
       <div class="flex justify-between items-center mb-6">
-        <h3 class="font-bold text-lg text-white">Start Conversation</h3>
+        <h3 id="new-chat-title" class="font-bold text-lg text-white">Start Conversation</h3>
         <button class="text-white/40 hover:text-white" onclick={() => isNewChatModalOpen = false}>✕</button>
       </div>
 
       <form onsubmit={startNewChat}>
         <div class="form-group mb-6">
           <label class="label" for="newPhone">Recipient Phone Number</label>
-          <input
-            id="newPhone"
-            type="tel"
-            class="input font-mono"
-            placeholder="+1234567890"
-            bind:value={newContactNum}
-            required
-            autofocus
-          />
+          <div class="search-input-container">
+            <Phone size={16} class="text-[var(--text-muted)] shrink-0" />
+            <input
+              id="newPhone"
+              type="tel"
+              class="input"
+              placeholder="+1234567890"
+              bind:value={newContactNum}
+              required
+              autofocus
+            />
+          </div>
           <span class="text-xs text-[var(--text-muted)] mt-1 block">Include country code (e.g. +1).</span>
         </div>
 
@@ -430,10 +479,11 @@
 
 <!-- Modal: Edit Profile -->
 {#if isProfileModalOpen}
-  <div class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-    <div class="card-glass w-full max-w-[600px] p-6 my-8 animate-fade text-left">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto" onkeydown={(e) => e.key === 'Escape' && (isProfileModalOpen = false)}>
+    <div class="card-glass w-full max-w-[600px] p-6 my-8 animate-fade text-left" role="dialog" aria-modal="true" aria-labelledby="profile-title">
       <div class="flex justify-between items-center mb-6 pb-2 border-b border-[var(--border)]">
-        <h3 class="font-bold text-lg text-white">Profile Configurations</h3>
+        <h3 id="profile-title" class="font-bold text-lg text-white">Profile Configurations</h3>
         <button class="text-white/40 hover:text-white" onclick={() => isProfileModalOpen = false}>✕</button>
       </div>
 
@@ -487,7 +537,7 @@
         <div class="grid grid-cols-1 gap-4 mb-6">
           <div class="form-group">
             <label class="label" for="profileTwilioSid">Twilio Account SID</label>
-            <input id="profileTwilioSid" type="text" class="input font-mono" bind:value={profileEdit.twilioSid} required />
+            <input id="profileTwilioSid" type="text" class="input font-mono" bind:value={profileEdit.twilioSid} />
           </div>
           <div class="form-group">
             <label class="label" for="profileTwilioToken">Twilio Auth Token (leave empty to keep current)</label>
@@ -495,7 +545,40 @@
           </div>
           <div class="form-group">
             <label class="label" for="profileTwilioSender">Twilio Sender ID (Phone Number)</label>
-            <input id="profileTwilioSender" type="text" class="input font-mono" bind:value={profileEdit.twilioSender} required />
+            <input id="profileTwilioSender" type="text" class="input font-mono" bind:value={profileEdit.twilioSender} />
+          </div>
+        </div>
+
+        <h4 class="text-xs font-bold uppercase tracking-wider text-[var(--cyan)] mb-4 border-t border-[var(--border)] pt-4">SMS Provider</h4>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div class="form-group">
+            <label class="label" for="profileSmsProvider">Provider</label>
+            <select id="profileSmsProvider" class="input" bind:value={profileEdit.smsProvider}>
+              <option value="TWILIO">Twilio</option>
+              <option value="SMPP">SMPP</option>
+              <option value="AUTO">Auto (SMPP → Twilio)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="label" for="profileSmppHost">SMSC Host</label>
+            <input id="profileSmppHost" type="text" class="input font-mono" bind:value={profileEdit.smppHost} placeholder="e.g. 127.0.0.1" />
+          </div>
+          <div class="form-group">
+            <label class="label" for="profileSmppPort">SMSC Port</label>
+            <input id="profileSmppPort" type="number" class="input font-mono" bind:value={profileEdit.smppPort} placeholder="2776" />
+          </div>
+          <div class="form-group">
+            <label class="label" for="profileSmppSystemId">System ID</label>
+            <input id="profileSmppSystemId" type="text" class="input font-mono" bind:value={profileEdit.smppSystemId} />
+          </div>
+          <div class="form-group">
+            <label class="label" for="profileSmppPassword">Password</label>
+            <input id="profileSmppPassword" type="password" class="input font-mono" bind:value={profileEdit.smppPassword} placeholder="Leave empty to keep current" />
+          </div>
+          <div class="form-group">
+            <label class="label" for="profileSmppAddrRange">Address Range (Sender ID)</label>
+            <input id="profileSmppAddrRange" type="text" class="input font-mono" bind:value={profileEdit.smppAddressRange} />
           </div>
         </div>
 

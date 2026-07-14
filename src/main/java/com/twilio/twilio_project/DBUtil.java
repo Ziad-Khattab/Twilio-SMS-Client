@@ -2,6 +2,7 @@ package com.twilio.twilio_project;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import org.flywaydb.core.Flyway;
 import java.sql.Connection;
 import java.sql.SQLException;
 
@@ -34,6 +35,12 @@ public class DBUtil {
         config.setKeepaliveTime(30_000);
 
         dataSource = new HikariDataSource(config);
+
+        Flyway flyway = Flyway.configure()
+                .dataSource(dataSource)
+                .baselineOnMigrate(true)
+                .load();
+        flyway.migrate();
     }
 
     public static Connection getConnection() throws SQLException {

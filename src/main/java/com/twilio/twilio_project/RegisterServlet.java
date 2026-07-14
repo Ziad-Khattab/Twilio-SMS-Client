@@ -36,17 +36,29 @@ public class RegisterServlet extends HttpServlet {
             JsonObject json = gson.fromJson(body, JsonObject.class);
 
             // Fetch inputs
-            String username = json.get("username").getAsString().trim();
-            String password = json.get("password").getAsString();
-            String fullName = json.get("fullName").getAsString().trim();
-            String birthdayRaw = json.get("birthday").getAsString().trim();
-            String msisdn = PhoneUtil.normalize(json.get("msisdn").getAsString().trim());
-            String job = json.get("job").getAsString().trim();
-            String email = json.get("email").getAsString().trim();
-            String address = json.get("address").getAsString().trim();
-            String twilioAccountSid = json.get("twilioSid").getAsString().trim();
-            String twilioAuthToken = json.get("twilioToken").getAsString();
-            String twilioSenderId = PhoneUtil.normalize(json.get("twilioSender").getAsString().trim());
+            String username = json.has("username") ? json.get("username").getAsString().trim() : "";
+            String password = json.has("password") ? json.get("password").getAsString() : "";
+            String fullName = json.has("fullName") ? json.get("fullName").getAsString().trim() : "";
+            String birthdayRaw = json.has("birthday") ? json.get("birthday").getAsString().trim() : "";
+            String msisdn = json.has("msisdn") ? PhoneUtil.normalize(json.get("msisdn").getAsString().trim()) : "";
+            String job = json.has("job") ? json.get("job").getAsString().trim() : "";
+            String email = json.has("email") ? json.get("email").getAsString().trim() : "";
+            String address = json.has("address") ? json.get("address").getAsString().trim() : "";
+            String twilioAccountSid = json.has("twilioSid") ? json.get("twilioSid").getAsString().trim() : "";
+            String twilioAuthToken = json.has("twilioToken") ? json.get("twilioToken").getAsString() : "";
+            String twilioSenderId = json.has("twilioSender") ? PhoneUtil.normalize(json.get("twilioSender").getAsString().trim()) : "";
+
+            if (username.isEmpty() || password.isEmpty()) {
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                response.getWriter().write("{\"status\":\"error\",\"message\":\"Username and password are required\"}");
+                return;
+            }
+
+            if (msisdn.isEmpty() || !PhoneUtil.validateE164(msisdn)) {
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                response.getWriter().write("{\"status\":\"error\",\"message\":\"Valid MSISDN (E.164 format) is required\"}");
+                return;
+            }
 
             if (UserRepository.existsByUsernameEmailOrMsisdn(username, email, msisdn)) {
                 response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
@@ -71,7 +83,9 @@ public class RegisterServlet extends HttpServlet {
                 try {
                     birthday = java.sql.Date.valueOf(java.time.LocalDate.parse(birthdayRaw));
                 } catch (java.time.format.DateTimeParseException e) {
-                    e.printStackTrace();
+                    response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                    response.getWriter().write("{\"status\":\"error\",\"message\":\"Invalid birthday format. Expected YYYY-MM-DD.\"}");
+                    return;
                 }
             }
             pending.setBirthday(birthday);

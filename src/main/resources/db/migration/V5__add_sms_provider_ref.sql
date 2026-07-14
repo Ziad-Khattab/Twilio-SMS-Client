@@ -1,0 +1,1 @@
+ALTER TABLE sms_history ADD COLUMN IF NOT EXISTS provider_ref_id TEXT;

@@ -13,11 +13,29 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.concurrent.ConcurrentHashMap;
 
 @WebServlet(name = "loginServlet", value = "/login")
 public class LoginServlet extends HttpServlet {
 
     private final Gson gson = new Gson();
+
+    // ponytail: global lock, per-ip locks if throughput matters
+    private static final int MAX_ATTEMPTS = 5;
+    private static final long WINDOW_MS = 60_000;
+    private static final ConcurrentHashMap<String, long[]> rateLimit = new ConcurrentHashMap<>();
+
+    private boolean isRateLimited(String ip) {
+        long now = System.currentTimeMillis();
+        long[] entry = rateLimit.compute(ip, (key, val) -> {
+            if (val == null || now - val[1] > WINDOW_MS) {
+                return new long[]{1, now};
+            }
+            val[0]++;
+            return val;
+        });
+        return entry[0] > MAX_ATTEMPTS;
+    }
 
     private static class AuthResult {
         int id;
@@ -31,6 +49,13 @@ public class LoginServlet extends HttpServlet {
         
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
+
+        String ip = request.getRemoteAddr();
+        if (isRateLimited(ip)) {
+            response.setStatus(429);
+            response.getWriter().write("{\"status\":\"error\",\"message\":\"Too many attempts. Try again later.\"}");
+            return;
+        }
 
         try {
             String body = UserRepository.readRequestBody(request);

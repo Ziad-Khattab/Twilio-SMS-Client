@@ -1,13 +1,11 @@
 package com.twilio.twilio_project;
 
 import jakarta.servlet.*;
-import jakarta.servlet.annotation.WebFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import java.io.IOException;
 
-@WebFilter(filterName = "authFilter", urlPatterns = {"/dashboard", "/profile", "/admin/*"})
 public class AuthFilter implements Filter {
 
     @Override
@@ -32,7 +30,7 @@ public class AuthFilter implements Filter {
         String userRole = (String) session.getAttribute("userRole");
         
         // 2. Privilege Boundary Check
-        if (requestURI.contains("/admin/")) {
+        if (requestURI.startsWith(request.getContextPath() + "/admin/")) {
             if (!"administrator".equals(userRole)) {
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                 response.getWriter().write("{\"status\":\"error\",\"message\":\"Access Denied: Admins Only\"}");
