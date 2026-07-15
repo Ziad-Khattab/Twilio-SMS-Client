@@ -11,6 +11,7 @@ import jakarta.servlet.http.HttpSession;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
 
 @WebServlet(name = "broadcastServlet", value = "/admin/broadcast")
 public class BroadcastServlet extends HttpServlet {
@@ -56,10 +57,14 @@ public class BroadcastServlet extends HttpServlet {
                 ChatWebSocket.pushToUser(uid, push.toString());
                 pushedCount++;
 
-                // Optionally send as real SMS
+                // Optionally send as real SMS to user's phone
                 if (sendSms) {
                     try {
-                        SmsRouter.send("broadcast", content, uid);
+                        Map<String, String> profile = UserRepository.getUserProfile(uid);
+                        String phone = profile != null ? profile.get("msisdn") : null;
+                        if (phone != null && !phone.isEmpty()) {
+                            SmsRouter.send(phone, content, uid);
+                        }
                     } catch (Exception ignored) {}
                 }
             }

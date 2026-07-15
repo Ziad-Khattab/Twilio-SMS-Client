@@ -42,14 +42,19 @@ public class SmsRouter {
 
     // Load SMPP config from user's DB fields, fall back to EnvLoader (global defaults).
     private static SmppConfig resolveSmppConfig(int userId) {
-        String host = UserRepository.findSmppConfig(userId, "smpp_host");
-        String port = UserRepository.findSmppConfig(userId, "smpp_port");
+        // host/port — EnvLoader is authoritative (profile-aware: localhost vs smscsim),
+        // DB overrides for per-user SMSC
+        String host = EnvLoader.get("SMPP_HOST");
+        String port = EnvLoader.get("SMPP_PORT");
+        String dbHost = UserRepository.findSmppConfig(userId, "smpp_host");
+        String dbPort = UserRepository.findSmppConfig(userId, "smpp_port");
+        if (dbHost != null && !dbHost.isEmpty()) host = dbHost;
+        if (dbPort != null && !dbPort.isEmpty()) port = dbPort;
+
+        // sid/pass/addr — per-user credentials from DB, fallback to EnvLoader
         String sid = UserRepository.findSmppConfig(userId, "smpp_system_id");
         String pass = UserRepository.findSmppConfig(userId, "smpp_password");
         String addr = UserRepository.findSmppConfig(userId, "smpp_address_range");
-
-        if (host == null || host.isEmpty()) host = EnvLoader.get("SMPP_HOST");
-        if (port == null || port.isEmpty()) port = EnvLoader.get("SMPP_PORT");
         if (sid == null || sid.isEmpty()) sid = EnvLoader.get("SMPP_SYSTEM_ID");
         if (pass == null || pass.isEmpty()) pass = EnvLoader.get("SMPP_PASSWORD");
         if (addr == null || addr.isEmpty()) addr = EnvLoader.get("SMPP_ADDRESS_RANGE");

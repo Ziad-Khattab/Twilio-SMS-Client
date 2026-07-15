@@ -27,17 +27,8 @@ public class EnvLoader {
         dotenv = builder.load();
     }
 
-    // Resolve key with profile awareness, fallback chain.
     public static String get(String key) {
-        String profile = getProfile();
-        String value = resolveForProfile(key, profile);
-        if (value == null) {
-            value = dotenv.get(key);
-        }
-        if (value == null) {
-            value = System.getenv(key);
-        }
-        return value;
+        return resolveForProfile(key, getProfile());
     }
 
     // Read APP_PROFILE from system property → .env → OS env. Defaults to "local".
@@ -54,7 +45,11 @@ public class EnvLoader {
         String profileKey = prefix + key;
         String value = dotenv.get(profileKey);
         if (value != null) return value;
-        return dotenv.get(key);
+        value = System.getenv(profileKey);
+        if (value != null && !value.isEmpty()) return value;
+        value = dotenv.get(key);
+        if (value != null) return value;
+        return System.getenv(key);
     }
 
     public static String getProfileName() {

@@ -17,9 +17,9 @@ public class DBUtil {
 
     static {
         HikariConfig config = new HikariConfig();
-        config.setJdbcUrl(EnvLoader.get("DATABASE_URL"));
-        config.setUsername(EnvLoader.get("DATABASE_USER"));
-        config.setPassword(EnvLoader.get("DATABASE_PASSWORD"));
+        config.setJdbcUrl(EnvLoader.get("DB_URL"));
+        config.setUsername(EnvLoader.get("DB_USER"));
+        config.setPassword(EnvLoader.get("DB_PASSWORD"));
 
         config.setMaximumPoolSize(10);
         config.setMinimumIdle(2);
