@@ -178,6 +178,22 @@ public final class UserRepository {
         }
     }
 
+    // Update SMS status from Twilio status callback webhook
+    public static void updateSmsStatusBySid(String messageSid, String twilioStatus, String errorCode) throws SQLException {
+        String mapped = switch (twilioStatus.toLowerCase()) {
+            case "delivered" -> "delivered";
+            case "failed", "undelivered" -> "failed";
+            default -> "pending"; // queued, sent, sending
+        };
+        String sql = "UPDATE sms_history SET status = ?::message_status WHERE provider_ref_id = ?";
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, mapped);
+            stmt.setString(2, messageSid);
+            stmt.executeUpdate();
+        }
+    }
+
     // Normalize SMPP DLR status codes to our enum (delivered / failed)
     private static String mapSmppStatus(String smppStatus) {
         if (smppStatus == null) return "delivered";
